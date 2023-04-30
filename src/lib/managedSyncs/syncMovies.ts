@@ -1,9 +1,7 @@
 import { SyncType, SyncStatus } from "../../common/types/db";
-import { Movie, PopularLetterboxdMovie, Sync } from "../../db/entities";
+import { Sync } from "../../db/entities";
 import { 
   getSyncRepository, 
-  getFilmEntriesRepository, 
-  getMoviesRepository, 
   getPopularLetterboxdMoviesRepository 
 } from "../../db/repositories";
 import { BetterloxApiError } from "../BetterloxApiError";
@@ -11,6 +9,7 @@ import { ScrapedMovie, scrapeMoviesByPage, scrapeMoviesOverPages } from "../lett
 import { MoreThan } from "typeorm";
 import { GENRES } from "../../common/constants";
 import axios from "axios";
+import { logger as loxDBLogger } from "../logger";
 
 export interface SyncAllMoviesByDateRangeOptions {
   startYear: number;
@@ -22,15 +21,16 @@ async function processPopularPage(set: Partial<ScrapedMovie>[]) {
   const PopularLetterboxdMoviesRepo = await getPopularLetterboxdMoviesRepository();
   const processed: ScrapedMovie[] = [];
   for (let i = 0; i < set.length; i++) {
-    const plm = set[i];
+    const popularMovieRecord = set[i];
     try {
-      const created = PopularLetterboxdMoviesRepo.create(plm);
+      const created = PopularLetterboxdMoviesRepo.create(popularMovieRecord);
       processed.push(await PopularLetterboxdMoviesRepo.save(created));
     } catch (error: unknown) {
       if (error instanceof BetterloxApiError) {
         throw error;
       }
-      console.log('Error found while processing page of popular movies', plm.name);
+
+      loxDBLogger.error('Error found while processing page of popular movies', popularMovieRecord.name);
       throw new BetterloxApiError('', { error });
     }
   }
@@ -38,61 +38,63 @@ async function processPopularPage(set: Partial<ScrapedMovie>[]) {
 }
 
 export interface SyncPopularMoviesPerYearOptions {
-  yearBatchSize: number;
+  // yearBatchSize: number;
   force?: boolean;
   moviesPerYear: number;
+  startYear?: number;
+  endYear?: number;
 }
 
 export async function syncPopularMoviesPerYear(sync: Sync, {
-  yearBatchSize,
-  moviesPerYear
+  moviesPerYear,
+  startYear = 1900,
+  endYear = (new Date()).getUTCFullYear()
 }: SyncPopularMoviesPerYearOptions) {
   const SyncRepo = await getSyncRepository();
   sync.type = SyncType.POPULAR_MOVIES_YEAR;
   await SyncRepo.save(sync);
-  const now = new Date();
-  const hoursBetween = 1;
-  const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
+  // const now = new Date();
+  // const hoursBetween = 1;
+  // const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
 
-  const completedDuringPastInterval = await SyncRepo.findBy({
-    finished: MoreThan(new Date(cutoff)),
-    status: SyncStatus.COMPLETE,
-    type: SyncType.POPULAR_MOVIES_YEAR
-  });
+  // const completedDuringPastInterval = await SyncRepo.findBy({
+  //   finished: MoreThan(new Date(cutoff)),
+  //   status: SyncStatus.COMPLETE,
+  //   type: SyncType.POPULAR_MOVIES_YEAR
+  // });
 
-  console.log('movies per year status:', JSON.stringify(completedDuringPastInterval, null, 2));
+  // loxDBLogger.verbose('Completed During Past Interval:', JSON.stringify(completedDuringPastInterval));
 
-  if (completedDuringPastInterval.length > 0) {
-    return 0;
-  }
+  // if (completedDuringPastInterval.length > 0) {
+  //   return 0;
+  // }
 
-  const lastPopularYearSync = await SyncRepo.find({
-    where: {
-      type: SyncType.POPULAR_MOVIES_YEAR,
-      status: SyncStatus.COMPLETE
-    },
-    order: {
-      finished: 'DESC'
-    },
-    take: 1
-  });
+  // const lastPopularYearSync = await SyncRepo.find({
+  //   where: {
+  //     type: SyncType.POPULAR_MOVIES_YEAR,
+  //     status: SyncStatus.COMPLETE
+  //   },
+  //   order: {
+  //     finished: 'DESC'
+  //   },
+  //   take: 1
+  // });
 
-  console.log(JSON.stringify(lastPopularYearSync, null, 2));
+  // loxDBLogger.verbose('Last Popular Year Sync:', JSON.stringify(lastPopularYearSync));
 
-  const currentYear = now.getUTCFullYear();
-  let startYear = 1900;
 
-  if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
-    const lastRange = lastPopularYearSync[0].secondaryId;
-    const possibleStartYear = Number(lastRange.substring(5));
-    if (possibleStartYear < currentYear) {
-      startYear = possibleStartYear;
-    }
-  }
 
-  const endYear = Math.min(currentYear, startYear + yearBatchSize);
+  // if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
+  //   const lastRange = lastPopularYearSync[0].secondaryId;
+  //   const possibleStartYear = Number(lastRange.substring(5));
+  //   if (possibleStartYear < currentYear) {
+  //     startYear = possibleStartYear;
+  //   }
+  // }
 
-  console.log('Syncing popular movies by date range...', `(${startYear} - ${endYear})`);
+  // const endYear = Math.min(currentYear, startYear + yearBatchSize);
+
+  loxDBLogger.verbose('Syncing popular movies by date range...', `(${startYear} - ${endYear})`);
   // sync movies from letterboxd /by/year pages
   const numSynced = await syncPopularMoviesByDateRange({
     startYear,
@@ -117,7 +119,8 @@ export async function syncPopularMoviesByDateRange({
   let results: ScrapedMovie[] = [];
   for (let year = startYear; year < endYear; year++) {
     
-    console.log(`Syncing popular letterboxd movies for year: ${year}`);
+    loxDBLogger.verbose(`Syncing popular letterboxd movies for year: ${year}`);
+
     const baseUrl = `https://letterboxd.com/films/ajax/popular/year/${year}/size/small`;
     try {
       const nextBatch = await scrapeMoviesOverPages({ baseUrl, maxMovies: moviesPerYear, processPage: processPopularPage });
@@ -133,7 +136,8 @@ export async function syncPopularMoviesByDateRange({
       if (error instanceof BetterloxApiError) {
         throw error;
       }
-      console.log('Error found during year-by-year page scraping and processing, for year:', year);
+      
+      loxDBLogger.error('Error found during year-by-year page scraping and processing, for year:', year);
       throw new BetterloxApiError('', { error });
     }
   }
@@ -161,37 +165,39 @@ export async function syncPopularMoviesPerGenre(sync: Sync, {
   sync.type = SyncType.POPULAR_MOVIES_GENRE;
   SyncRepo.save(sync);
 
-  const now = new Date();
-  const hoursBetween = 1;
-  const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
+  if (!force) {
+    const now = new Date();
+    const hoursBetween = 1;
+    const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
 
-  const completedDuringPastInterval = await SyncRepo.findBy({
-    finished: MoreThan(new Date(cutoff)),
-    status: SyncStatus.COMPLETE,
-    type: SyncType.POPULAR_MOVIES_GENRE
-  });
+    const completedDuringPastInterval = await SyncRepo.findBy({
+      finished: MoreThan(new Date(cutoff)),
+      status: SyncStatus.COMPLETE,
+      type: SyncType.POPULAR_MOVIES_GENRE
+    });
 
-  if (completedDuringPastInterval.length > 0) {
-    return 0;
+    if (completedDuringPastInterval.length > 0) {
+      return 0;
+    }
   }
 
   let results: ScrapedMovie[] = [];
 
   for (let i = 0; i < genrePaths.length; i++) {
     const genre = genrePaths[i];
-    console.log(`Retrieving popular movies for genre: ${genre}`);
+    loxDBLogger.verbose(`Retrieving popular movies for genre: ${genre}`);
     const baseUrl = `https://letterboxd.com/films/ajax/popular/genre/${genre}/size/small`;
     try {
       const nextBatch = await scrapeMoviesOverPages({ baseUrl, maxMovies: moviesPerGenre, processPage: processPopularPage });
       results = results.concat(nextBatch);
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
-        console.log('Axios error with genres', 'url:', error.request?.url, 'error message:', error.message, 'status text:', error.response?.statusText, 'status:', error.response?.status);
+        loxDBLogger.error('Axios error with genres', 'url:', error.request?.url, 'error message:', error.message, 'status text:', error.response?.statusText, 'status:', error.response?.status);
       }
       if (error instanceof BetterloxApiError) {
         throw error;
       }
-      console.log('Error found during genre page scraping and processing, for genre:', genre);
+      loxDBLogger.error('Error found during genre page scraping and processing, for genre:', genre);
       throw new BetterloxApiError('', { error });
     }
   }

@@ -5,6 +5,9 @@ import { FilmEntry, LetterboxdList, Movie, PopularLetterboxdMovie } from "../db/
 import { getDataImageTagFromUrl } from "./dataImageUtils";
 import { getErrorAsString } from "./getErrorAsString";
 import { isNumber } from "./typeGuards";
+import { Logger } from "../common/types/base";
+import { logger as loxLogger } from "../lib/logger";
+
 const MAX_TRIES = 5;
 
 interface FoundLetterboxdAccount {
@@ -143,18 +146,20 @@ export async function scrapeMoviesOverPages({
   maxPages = 50,
   page = 1,
   movies = [],
-  processPage
+  processPage,
+  logger
 }: {
   baseUrl: string;
   maxMovies?: number;
   maxPages?: number;
   page?: number;
   movies?: ScrapedMovie[];
-  processPage?: (set: ScrapedMovie[]) => Promise<ScrapedMovie[]>;
+  processPage?: (set: ScrapedMovie[], logger?: Logger) => Promise<ScrapedMovie[]>;
+  logger?: Logger;
 }): Promise<ScrapedMovie[]> {
   const maxMoviesForPage = typeof maxMovies === "number" ? maxMovies - movies.length : undefined;
   const result = await scrapeMoviesByPage({ baseUrl, maxMoviesForPage, page });
-  const batch = (typeof processPage === "function") ? (await processPage(result.movies)) : result.movies;
+  const batch = (typeof processPage === "function") ? (await processPage(result.movies, logger)) : result.movies;
   const accumulator = [ ...movies, ...batch ];
   
   if (
@@ -169,7 +174,8 @@ export async function scrapeMoviesOverPages({
     maxMovies,
     maxPages,
     page: page + 1,
-    movies: accumulator
+    movies: accumulator,
+    logger
   });
 }
 
@@ -185,7 +191,7 @@ export async function scrapeMoviesByPage({
   maxMoviesForPage
 }: ScrapeMoviesByPageOptions): Promise<{ movies: Partial<ScrapedMovie>[] }> {
   const pageUrl = `${baseUrl}/page/${page}`;
-  console.log(`Syncing: ${pageUrl}`);
+  loxLogger.debug(`Syncing: ${pageUrl}`);
   const { data } = await tryLetterboxd(pageUrl);
   const $ = cheerio.load(data); 
   const elements = $('.col-main > ul.poster-list > li');
@@ -430,7 +436,7 @@ export async function scrapeListsForUser(
   return await scrapeListsForUser(options, count + batchCount, page + 1);
 }
 
-export async function scrapeListByUrl(url: string): Promise<ScrapedList> {
+export async function scrapeListByUrl(url: string, logger?: Logger): Promise<ScrapedList> {
   const { data } = await tryLetterboxd(url);
   const $$ = cheerio.load(data);
 
@@ -454,13 +460,13 @@ export async function scrapeListByUrl(url: string): Promise<ScrapedList> {
 
   let movieIds: number[] = [];
   try {
-    const films = await scrapeMoviesOverPages({ baseUrl: url });
+    const films = await scrapeMoviesOverPages({ baseUrl: url, logger });
     movieIds = films.map(f => f.id).filter(isNumber);  
     if (movieIds.length < films.length) {
-      console.log(`Warning: Dropped ${films.length - movieIds.length} movie IDs for not having a numeric ID, which may indicate a bug`);
+      loxLogger.warning(`Dropped ${films.length - movieIds.length} movie IDs for not having a numeric ID, which may indicate a bug`);
     }  
   } catch (error) {
-    console.log("error while scrapeMoviesOverPages", getErrorAsString(error));
+    loxLogger.error("error while scrapeMoviesOverPages", getErrorAsString(error));
     throw error;
   }
 

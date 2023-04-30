@@ -1,3 +1,5 @@
+import { LOG_LEVEL } from "./types/base";
+
 export const JOB_ALLOW_LIST: string[] = [
   "Editor",
   "Director of Photography",
@@ -26,7 +28,7 @@ export const JOB_ALLOW_LIST: string[] = [
   "Cinematography",
 ];
 
-export const LOG_LEVELS = ["error", "warning", "info", "debug", "verbose"];
+export const ORDERED_LOG_LEVELS: LOG_LEVEL[] = ["error", "warning", "info", "verbose", "debug"];
 
 export const CREW_JOB_MAP = {
   "directors": ["Director"],

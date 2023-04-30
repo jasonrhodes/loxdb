@@ -1,14 +1,18 @@
 import "reflect-metadata";
 import { DataSource, DataSourceOptions, LoggerOptions } from "typeorm";
 import * as entities from "./entities";
+import { logger } from "../lib/logger";
 
 type Mutable<T> = { -readonly [P in keyof T ]: T[P] };
 type MyDataSourceOptions = Mutable<DataSourceOptions>;
 
 let dataSource: DataSource | null = null;
 
-async function init() {
-  console.log(`\n\n[${(new Date()).toISOString()}] ATTN: POST GRES CONNECTION BEING REINITIALIZED\n\n`);
+export interface InitOrmOptions {
+  resyncDb?: boolean;
+}
+export async function initOrm({ resyncDb = process.env.RESYNC_LOX_DB === 'true' }: InitOrmOptions = {}) {
+  logger.verbose('POST GRES CONNECTION BEING REINITIALIZED');
   
   const { DATABASE_TYPE } = process.env;
   let dbOptions: MyDataSourceOptions = {} as MyDataSourceOptions;
@@ -78,18 +82,35 @@ async function init() {
     ...dbOptions,
     entities,
     logging,
-    synchronize: process.env.SYNC_DB ? true : false
+    synchronize: resyncDb
   });
 
   dataSource = await ds.initialize();
 }
 
-init();
+interface TryDataSourceOptions {
+  counter?: number; 
+  initializing?: boolean;
+}
 
-export async function getDataSource(): Promise<DataSource> {
+async function tryDataSource({ counter = 1, initializing = false }: TryDataSourceOptions = {}): Promise<DataSource> {
+  if (counter > 10) {
+    const message = `getDataSource attempted to initialize database too many times - ${counter} tries`;
+    logger.error(message);
+    throw new Error(message);
+  }
+
+  if (!initializing) {
+    await initOrm();
+  }
+
   if (dataSource === null) {
-    return await new Promise((resolve) => setTimeout(() => resolve(getDataSource()), 100));
+    return await new Promise((resolve) => setTimeout(() => resolve(tryDataSource({ counter: counter + 1, initializing: true })), 10));
   }
 
   return dataSource;
+}
+
+export async function getDataSource(): Promise<DataSource> {
+  return tryDataSource();
 }

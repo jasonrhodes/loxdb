@@ -1,10 +1,14 @@
-import { SyncType, SyncStatus } from "../../common/types/db";
-import { Sync } from "../../db/entities";
+import { SyncType, SyncStatus, SyncTrigger } from "../../common/types/db";
 import { getSyncRepository, getFilmEntriesRepository, getMoviesRepository } from "../../db/repositories";
 
-export async function syncEntriesMovies(sync: Sync, limit?: number) {
+export interface SyncEntriesMoviesOptions {
+  limit?: number;
+}
+
+export async function syncEntriesMovies({ limit = 1000 }: SyncEntriesMoviesOptions = {}) {
   const SyncRepo = await getSyncRepository();
-  sync.type = SyncType.RATINGS_MOVIES;
+  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
+  sync.type = SyncType.ENTRIES_MISSING_MOVIES;
   SyncRepo.save(sync);
 
   const FilmEntriesRepo = await getFilmEntriesRepository();
@@ -22,7 +26,7 @@ export async function syncEntriesMovies(sync: Sync, limit?: number) {
       numSynced: synced.length
     });
   } else {
-    console.log(`Attempted to sync ${missingMovies.length} movies, but 0 were synced.\n${JSON.stringify(missingMovies)}`);
+    throw new Error(`Attempted to sync ${missingMovies.length} movies, but 0 were synced. ${JSON.stringify(missingMovies)}`);
   }
   return synced;
 }
