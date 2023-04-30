@@ -1,39 +1,49 @@
-import { DBClient, DBStatement, SqliteAdapterConfig } from "./types";
-import Database, { Statement } from "better-sqlite3";
+/**
+ * This file has been commented out so I can remove the dependency
+ * on better-sqlite3, which causes lots of issues in Lambda/Docker
+ * world due to it needing node-gyp, python, make, etc.
+ * 
+ * If I need this again, I will need to add better-sqlite3 back as
+ * a dependency to this library, which will in turn add it back to
+ * both the betterlox-app and to the nova script lib.
+ */
 
-export function getClient(config: SqliteAdapterConfig) {
-  return new SqliteClient(config);
-}
+// import { DBClient, DBStatement, SqliteAdapterConfig } from "./types";
+// import Database, { Statement } from "better-sqlite3";
 
-class SqliteClient implements DBClient {
-  db: InstanceType<typeof Database>;
+// export function getClient(config: SqliteAdapterConfig) {
+//   return new SqliteClient(config);
+// }
 
-  constructor(config: SqliteAdapterConfig) {
-    this.db = new Database(config.path);
-  }
+// class SqliteClient implements DBClient {
+//   db: InstanceType<typeof Database>;
 
-  prepare<V extends any[], R = unknown>(query: string) {
-    const stmt = this.db.prepare<V>(query);
-    return new SqliteStatement<V, R>(stmt);
-  }
-}
+//   constructor(config: SqliteAdapterConfig) {
+//     this.db = new Database(config.path);
+//   }
 
-class SqliteStatement<V extends any[], R = unknown> implements DBStatement<V, R> {
-  stmt: Statement<V>;
+//   prepare<V extends any[], R = unknown>(query: string) {
+//     const stmt = this.db.prepare<V>(query);
+//     return new SqliteStatement<V, R>(stmt);
+//   }
+// }
 
-  constructor(stmt: Statement<V>) {
-    this.stmt = stmt;
-  }
+// class SqliteStatement<V extends any[], R = unknown> implements DBStatement<V, R> {
+//   stmt: Statement<V>;
 
-  async run(...values: V) {
-    return this.stmt.run(...values);
-  }
+//   constructor(stmt: Statement<V>) {
+//     this.stmt = stmt;
+//   }
 
-  async all(...values: V) {
-    return this.stmt.all(...values) as R[];
-  }
+//   async run(...values: V) {
+//     return this.stmt.run(...values);
+//   }
 
-  async get(...values: V) {
-    return this.stmt.get(...values) as R | undefined;
-  }
-}
+//   async all(...values: V) {
+//     return this.stmt.all(...values) as R[];
+//   }
+
+//   async get(...values: V) {
+//     return this.stmt.get(...values) as R | undefined;
+//   }
+// }

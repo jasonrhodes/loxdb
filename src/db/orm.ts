@@ -23,14 +23,23 @@ export async function initOrm({ resyncDb = process.env.RESYNC_LOX_DB === 'true' 
 
   switch (DATABASE_TYPE) {
     case "sqlite":
-    case "better-sqlite3":
-      dbOptions.type = "sqlite";
-      const { DATABASE_PATH } = process.env;
-      if (!DATABASE_PATH) {
-        throw new Error(`Invalid database configuration, sqlite chosen but no path provided`);
-      }
-      dbOptions.database = DATABASE_PATH;
-      break;
+    /**
+     * The better-sqlite3 method has been commented out so I can remove the dependency
+     * on better-sqlite3, which causes lots of issues in Lambda/Docker
+     * world due to it needing node-gyp, python, make, etc.
+     * 
+     * If I need this again, I will need to add better-sqlite3 back as
+     * a dependency to this library, which will in turn add it back to
+     * both the betterlox-app and to the nova script lib.
+     */
+    // case "better-sqlite3":
+    //   dbOptions.type = "sqlite";
+    //   const { DATABASE_PATH } = process.env;
+    //   if (!DATABASE_PATH) {
+    //     throw new Error(`Invalid database configuration, sqlite chosen but no path provided`);
+    //   }
+    //   dbOptions.database = DATABASE_PATH;
+    //   break;
     case "postgres":
       const { DATABASE_URL } = process.env;
       if (!DATABASE_URL) {
