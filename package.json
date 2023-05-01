@@ -1,6 +1,6 @@
 {
   "name": "@rhodesjason/loxdb",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "author": "Jason Rhodes <jason.matthew.rhodes@gmail.com>",
