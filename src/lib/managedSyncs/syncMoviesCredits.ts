@@ -1,39 +1,45 @@
-import { SyncType, SyncStatus } from "../../common/types/db";
+import { SyncType, SyncStatus, SyncTrigger } from "../../common/types/db";
 import { CastRole, CrewRole, Movie, Sync } from "../../db/entities";
 import { getSyncRepository, getMoviesRepository } from "../../db/repositories";
 import { addCast, addCrew } from "../addCredits";
 import { getErrorAsString } from "../getErrorAsString";
 import { tmdb } from "../tmdb";
+import { logger as loxDBLogger } from "../../lib/logger";
 
 export async function syncOneMovieCredits(movie: Movie) {
   const syncedCastRoles: CastRole[] = [];
   const syncedCrewRoles: CrewRole[] = [];
   const { cast, crew } = await tmdb.movieCredits(movie.id);
   try {
-    console.log(`Syncing cast for movie:${movie.id}/${movie.title}`);
+    loxDBLogger.verbose(`Syncing cast for movie:${movie.id}/${movie.title}`);
     const castRoles = await addCast({ cast, movieId: movie.id });
     castRoles.forEach(c => c ? syncedCastRoles.push(c) : null);
   } catch (error: unknown) {
-    console.log(getErrorAsString(error));
+    loxDBLogger.error(getErrorAsString(error));
   }
   try {
     const crewRoles = await addCrew({ crew, movieId: movie.id });
     crewRoles.forEach(c => c ? syncedCrewRoles.push(c) : null);
   } catch (error) {
-    console.log(getErrorAsString(error));
+    loxDBLogger.error(getErrorAsString(error));
   }
 
   return { syncedCastRoles, syncedCrewRoles };
 }
 
-export async function syncAllMoviesCredits(sync: Sync, limit?: number) {
+export interface SyncAllMoviesCreditsOptions {
+  limit?: number;
+}
+
+export async function syncAllMoviesCredits({ limit = 5000 }: SyncAllMoviesCreditsOptions = {}) {
   const SyncRepo = await getSyncRepository();
+  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
   sync.type = SyncType.MOVIES_CREDITS;
   SyncRepo.save(sync);
   const MoviesRepo = await getMoviesRepository();
   const moviesWithMissingCredits = await MoviesRepo.getMissingCredits(limit);
   if (moviesWithMissingCredits.length === 0) {
-    return { cast: [], crew: [], length: 0 };
+    return { cast: [], crew: [], syncedCount: 0 };
   }
 
   let allSyncedCastRoles: CastRole[] = [];
@@ -48,9 +54,9 @@ export async function syncAllMoviesCredits(sync: Sync, limit?: number) {
 
     try {
       await MoviesRepo.save(movie);
-    } catch (error) {
-      console.log(JSON.stringify(movie.crew));
-      console.log('Movie save error', movie.id, error instanceof Error ? error.message : error);
+    } catch (error: any) {
+      loxDBLogger.debug(JSON.stringify(movie.crew));
+      loxDBLogger.error('Movie save error', movie.id, getErrorAsString(error));
       throw error;
     }
   }
@@ -63,8 +69,10 @@ export async function syncAllMoviesCredits(sync: Sync, limit?: number) {
       numSynced
     });
   } else {
-    console.log(`Attempted to sync ${moviesWithMissingCredits.length} movies, but 0 credits were synced.\n${JSON.stringify(moviesWithMissingCredits)}`);
+    const message = `Attempted to sync ${moviesWithMissingCredits.length} movies, but 0 credits were synced. ${JSON.stringify(moviesWithMissingCredits)}`;
+    loxDBLogger.error(message);
+    throw new Error(message);
   }
 
-  return { cast: allSyncedCastRoles, crew: allSyncedCrewRoles, length: numSynced };
+  return { cast: allSyncedCastRoles, crew: allSyncedCrewRoles, syncedCount: numSynced };
 }

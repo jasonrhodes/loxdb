@@ -15,7 +15,10 @@ export async function syncEntriesMovies({ limit = 1000 }: SyncEntriesMoviesOptio
   const missingMovies = await FilmEntriesRepo.getFilmEntriesWithMissingMovies(limit);
 
   if (missingMovies.length === 0) {
-    return [];
+    return {
+      missing: [],
+      syncedCount: 0
+    };
   }
 
   const MoviesRepo = await getMoviesRepository();
@@ -28,5 +31,9 @@ export async function syncEntriesMovies({ limit = 1000 }: SyncEntriesMoviesOptio
   } else {
     throw new Error(`Attempted to sync ${missingMovies.length} movies, but 0 were synced. ${JSON.stringify(missingMovies)}`);
   }
-  return synced;
+
+  return {
+    missing: missingMovies.map(m => m.letterboxdSlug),
+    syncedCount: synced.length
+  };
 }

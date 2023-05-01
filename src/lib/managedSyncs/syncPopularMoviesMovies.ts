@@ -1,18 +1,14 @@
-import { SyncStatus, SyncType } from "../../common/types/db";
-import { Sync } from "../../db/entities";
+import { SyncStatus, SyncTrigger, SyncType } from "../../common/types/db";
 import { getMoviesRepository, getPopularLetterboxdMoviesRepository, getSyncRepository } from "../../db/repositories";
+import { logger as loxDBlogger } from "../../lib/logger";
 
 interface Options {
   limit?: number;
-  force?: boolean;
 }
 
-export async function syncPopularMoviesMovies(sync: Sync, {
-  limit,
-  force
-}: Options) {
-
+export async function syncPopularMoviesMovies({ limit = 5000 }: Options = {}) {
   const SyncRepo = await getSyncRepository();
+  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
   sync.type = SyncType.POPULAR_MOVIES_MOVIES;
   SyncRepo.save(sync);
 
@@ -20,7 +16,10 @@ export async function syncPopularMoviesMovies(sync: Sync, {
   const missingMovies = await PopularMoviesRepo.getPopularMoviesWithMissingMovies(limit);
 
   if (missingMovies.length === 0) {
-    return [];
+    return {
+      syncedCount: 0,
+      missing: missingMovies
+    };
   }
 
   const MoviesRepo = await getMoviesRepository();
@@ -31,7 +30,13 @@ export async function syncPopularMoviesMovies(sync: Sync, {
       numSynced: synced.length
     });
   } else {
-    console.log(`Attempted to sync ${missingMovies.length} movies, but 0 were synced.\n${JSON.stringify(missingMovies)}`);
+    const message = `Attempted to sync ${missingMovies.length} movies, but 0 were synced.\n${JSON.stringify(missingMovies)}`;
+    loxDBlogger.error(message);
+    throw new Error(message);
   }
-  return synced;
+  
+  return {
+    syncedCount: synced.length,
+    missing: missingMovies.map(m => m.letterboxdSlug)
+  };
 }
