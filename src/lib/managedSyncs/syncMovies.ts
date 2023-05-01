@@ -1,4 +1,4 @@
-import { SyncType, SyncStatus } from "../../common/types/db";
+import { SyncType, SyncStatus, SyncTrigger } from "../../common/types/db";
 import { Sync } from "../../db/entities";
 import { 
   getSyncRepository, 
@@ -45,13 +45,14 @@ export interface SyncPopularMoviesPerYearOptions {
   endYear?: number;
 }
 
-export async function syncPopularMoviesPerYear(sync: Sync, {
+export async function syncPopularMoviesPerYear({
   moviesPerYear,
   startYear = 1900,
   endYear,
   yearBatchSize = 20
 }: SyncPopularMoviesPerYearOptions) {
   const SyncRepo = await getSyncRepository();
+  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
   sync.type = SyncType.POPULAR_MOVIES_YEAR;
   await SyncRepo.save(sync);
 
@@ -146,33 +147,16 @@ const genrePaths = GENRES
   });
 
 interface SyncPopularMoviesPerGenreOptions {
-  force?: boolean;
   moviesPerGenre: number;
 }
 
-export async function syncPopularMoviesPerGenre(sync: Sync, {
-  force,
+export async function syncPopularMoviesPerGenre({
   moviesPerGenre
 }: SyncPopularMoviesPerGenreOptions) {
   const SyncRepo = await getSyncRepository();
+  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
   sync.type = SyncType.POPULAR_MOVIES_GENRE;
   SyncRepo.save(sync);
-
-  if (!force) {
-    const now = new Date();
-    const hoursBetween = 1;
-    const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
-
-    const completedDuringPastInterval = await SyncRepo.findBy({
-      finished: MoreThan(new Date(cutoff)),
-      status: SyncStatus.COMPLETE,
-      type: SyncType.POPULAR_MOVIES_GENRE
-    });
-
-    if (completedDuringPastInterval.length > 0) {
-      return 0;
-    }
-  }
 
   let results: ScrapedMovie[] = [];
 
@@ -183,15 +167,17 @@ export async function syncPopularMoviesPerGenre(sync: Sync, {
     try {
       const nextBatch = await scrapeMoviesOverPages({ baseUrl, maxMovies: moviesPerGenre, processPage: processPopularPage });
       results = results.concat(nextBatch);
-    } catch (error: unknown) {
+    } catch (error: any) {
       if (axios.isAxiosError(error)) {
         loxDBLogger.error('Axios error with genres', 'url:', error.request?.url, 'error message:', error.message, 'status text:', error.response?.statusText, 'status:', error.response?.status);
+        throw error;
       }
       if (error instanceof BetterloxApiError) {
         throw error;
       }
-      loxDBLogger.error('Error found during genre page scraping and processing, for genre:', genre);
-      throw new BetterloxApiError('', { error });
+      const message = `Error found during genre page scraping and processing, for genre: ${genre}`;
+      loxDBLogger.error(message, error.message);
+      throw new BetterloxApiError(message, { error });
     }
   }
 
@@ -200,5 +186,8 @@ export async function syncPopularMoviesPerGenre(sync: Sync, {
     numSynced: results.length
   });
 
-  return results.length;
+  return {
+    movies: results.map(m => m.name),
+    cachedCount: results.length
+  };
 }
