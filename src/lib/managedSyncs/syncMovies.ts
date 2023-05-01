@@ -38,7 +38,7 @@ async function processPopularPage(set: Partial<ScrapedMovie>[]) {
 }
 
 export interface SyncPopularMoviesPerYearOptions {
-  // yearBatchSize: number;
+  yearBatchSize?: number;
   force?: boolean;
   moviesPerYear: number;
   startYear?: number;
@@ -48,53 +48,42 @@ export interface SyncPopularMoviesPerYearOptions {
 export async function syncPopularMoviesPerYear(sync: Sync, {
   moviesPerYear,
   startYear = 1900,
-  endYear = (new Date()).getUTCFullYear()
+  endYear,
+  yearBatchSize = 20
 }: SyncPopularMoviesPerYearOptions) {
   const SyncRepo = await getSyncRepository();
   sync.type = SyncType.POPULAR_MOVIES_YEAR;
   await SyncRepo.save(sync);
-  // const now = new Date();
-  // const hoursBetween = 1;
-  // const cutoff = (new Date(now.getTime() - (1000 * 60 * 60 * hoursBetween))).toISOString();
 
-  // const completedDuringPastInterval = await SyncRepo.findBy({
-  //   finished: MoreThan(new Date(cutoff)),
-  //   status: SyncStatus.COMPLETE,
-  //   type: SyncType.POPULAR_MOVIES_YEAR
-  // });
+  if (!endYear) {
+    loxDBLogger.verbose('Popular Year Sync: Calculating end year because one was not specifically provided');
+    const lastPopularYearSync = await SyncRepo.find({
+      where: {
+        type: SyncType.POPULAR_MOVIES_YEAR,
+        status: SyncStatus.COMPLETE
+      },
+      order: {
+        finished: 'DESC'
+      },
+      take: 1
+    });
 
-  // loxDBLogger.verbose('Completed During Past Interval:', JSON.stringify(completedDuringPastInterval));
+    loxDBLogger.verbose('Previous Popular Year Syncs:', JSON.stringify(lastPopularYearSync));
 
-  // if (completedDuringPastInterval.length > 0) {
-  //   return 0;
-  // }
+    const currentYear = (new Date()).getUTCFullYear();
 
-  // const lastPopularYearSync = await SyncRepo.find({
-  //   where: {
-  //     type: SyncType.POPULAR_MOVIES_YEAR,
-  //     status: SyncStatus.COMPLETE
-  //   },
-  //   order: {
-  //     finished: 'DESC'
-  //   },
-  //   take: 1
-  // });
+    if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
+      const lastRange = lastPopularYearSync[0].secondaryId;
+      const possibleStartYear = Number(lastRange.substring(5));
+      if (possibleStartYear < currentYear) {
+        startYear = possibleStartYear;
+      }
+    }
 
-  // loxDBLogger.verbose('Last Popular Year Sync:', JSON.stringify(lastPopularYearSync));
+    endYear = Math.min(currentYear, startYear + yearBatchSize);
+  }
 
-
-
-  // if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
-  //   const lastRange = lastPopularYearSync[0].secondaryId;
-  //   const possibleStartYear = Number(lastRange.substring(5));
-  //   if (possibleStartYear < currentYear) {
-  //     startYear = possibleStartYear;
-  //   }
-  // }
-
-  // const endYear = Math.min(currentYear, startYear + yearBatchSize);
-
-  loxDBLogger.verbose('Syncing popular movies by date range...', `(${startYear} - ${endYear})`);
+  loxDBLogger.info('Syncing popular movies for year range:', `${startYear} - ${endYear}`);
   // sync movies from letterboxd /by/year pages
   const numSynced = await syncPopularMoviesByDateRange({
     startYear,
