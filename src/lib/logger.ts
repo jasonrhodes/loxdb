@@ -17,7 +17,14 @@ export class LoxDBLogger implements Logger {
   log(level: LOG_LEVEL, ...messages: LogMessage[]) {
     if (this.writeLevels.includes(level)) {
       const now = new Date();
-      console.log('[loxdb 🐟]', `[${level.toUpperCase()}]`, `[${now.toISOString()}]`, ...messages);
+      let logMethod: 'log' | 'error' | 'warn' = 'log';
+      if (level === "error") {
+        logMethod = 'error';
+      }
+      if (level === "warning") {
+        logMethod = 'warn';
+      }
+      console[logMethod]('[loxdb 🐟]', `[${level.toUpperCase()}]`, `[${now.toISOString()}]`, ...messages);
     }
   }
 
