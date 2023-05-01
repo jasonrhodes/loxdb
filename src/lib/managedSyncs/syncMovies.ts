@@ -97,7 +97,11 @@ export async function syncPopularMoviesPerYear(sync: Sync, {
     numSynced
   });
 
-  return numSynced;
+  return {
+    cachedCount: numSynced,
+    startYear,
+    endYear
+  };
 }
 
 export async function syncPopularMoviesByDateRange({
