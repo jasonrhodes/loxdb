@@ -5,7 +5,7 @@
 
 import { FilmEntry } from "../db/entities";
 import { getFilmEntriesRepository, getUserRepository } from "../db/repositories";
-import { findLastFilmsPage, findLastWatchesPage, scrapeWatchesByPage } from "./letterboxd";
+import { findLastFilmsPage, scrapeWatchesByPage } from "./letterboxd";
 import { logger } from "./logger";
 
 export class SyncLetterboxdError extends Error {
@@ -19,8 +19,8 @@ export class SyncLetterboxdError extends Error {
   }
 }
 
-export async function syncRecentUserWatches({ userId }: { userId: number; }) {
-  return await syncUserWatches({ userId, breakOnDuplicates: { active: true, startOnPage: 2 } })
+export async function syncRecentUserWatches({ userId, maxSync = 30 }: { userId: number; maxSync?: number; }) {
+  return await syncUserWatches({ userId, maxSync })
 }
 
 export async function syncAllUserWatches({ userId }: { userId: number; }) {
@@ -35,6 +35,7 @@ interface BreakOnDuplicatesConfig {
 interface SyncUserWatchesOptions {
   userId: number;
   breakOnDuplicates?: BreakOnDuplicatesConfig;
+  maxSync?: number;
 }
 
 export async function syncUserWatches({
@@ -42,6 +43,7 @@ export async function syncUserWatches({
   breakOnDuplicates = {
     active: false
   },
+  maxSync
 }: SyncUserWatchesOptions) {
   let syncedWatches: FilmEntry[] = [];
   const UsersRepo = await getUserRepository();
@@ -61,7 +63,9 @@ export async function syncUserWatches({
         username,
         page,
         breakOnDuplicates: breakOnDupesThisPage,
-        collectionDate
+        collectionDate,
+        syncCount: syncedWatches.length,
+        maxSync
       });
 
       if (syncedForPage.length === 0) {
@@ -74,11 +78,17 @@ export async function syncUserWatches({
 
       syncedWatches = syncedWatches.concat(syncedForPage);
       logger.verbose(`Page ${page} processed, found and synced ${syncedForPage.length} watches (total: ${syncedWatches.length})`);
+      
+      if (maxSync && syncedWatches.length >= maxSync) {
+        logger.info(`Reached the max sync count of ${maxSync}, shutting down`);
+        break;
+      }
     }
   } catch (error) {
     let message = "Unknown error occurred";
     if (error instanceof Error) {
-      message = error.message;
+      throw error;
+      // message = error.message;
     }
     if (typeof error === "string") {
       message = error;
@@ -104,11 +114,21 @@ interface SyncPageOptions {
   page: number;
   breakOnDuplicates?: boolean;
   collectionDate: Date;
+  syncCount: number;
+  maxSync?: number;
 }
   
-async function syncWatchesForPage({ userId, username, page, breakOnDuplicates = false, collectionDate }: SyncPageOptions) {
+async function syncWatchesForPage({ 
+  userId, 
+  username, 
+  page, 
+  breakOnDuplicates = false, 
+  collectionDate, 
+  syncCount, 
+  maxSync 
+}: SyncPageOptions) {
   const FilmEntriesRepo = await getFilmEntriesRepository();
-  const { watches } = await scrapeWatchesByPage({ username, page, collectionDate });
+  const { watches } = await scrapeWatchesByPage({ username, page, collectionDate, syncCount, maxSync });
 
   if (watches.length === 0) {
     return [];
@@ -131,11 +151,11 @@ async function syncWatchesForPage({ userId, username, page, breakOnDuplicates = 
     } = watched;
 
     if (typeof movieId !== "number") {
-      throw new Error('Invalid TMDB ID');
+      throw new Error(`Invalid TMDB ID: ${movieId} (${typeof movieId})`);
     }
 
     if (typeof name !== "string") {
-      throw new Error(`Invalid name ${name}`);
+      throw new Error(`Invalid name ${name} (${typeof name})`);
     }
 
     try {

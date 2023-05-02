@@ -6,7 +6,7 @@ import { getDataImageTagFromUrl } from "./dataImageUtils";
 import { getErrorAsString } from "./getErrorAsString";
 import { isNumber } from "./typeGuards";
 import { Logger } from "../common/types/base";
-import { logger as loxLogger } from "../lib/logger";
+import { LoxDBLogger, logger, logger as loxLogger } from "../lib/logger";
 
 const MAX_TRIES = 5;
 
@@ -275,13 +275,17 @@ interface ScrapeByPageOptions {
   username: string;
   page?: number;
   direction?: 'up' | 'down';
-  collectionDate: Date
+  collectionDate: Date;
+  syncCount: number;
+  maxSync?: number;
 }
 
 export async function scrapeWatchesByPage({
   username,
   page = 1,
-  collectionDate
+  collectionDate,
+  syncCount,
+  maxSync
 }: ScrapeByPageOptions): Promise<{ watches: Array<Partial<FilmEntry>> }> {
   const { data } = await tryLetterboxd(
     `https://letterboxd.com/${username}/films/by/rated-date/page/${page}`
@@ -293,7 +297,17 @@ export async function scrapeWatchesByPage({
     return { watches: [] };
   }
 
-  const watches = await Promise.all(watchElements.map(async (i, item) => {
+  let sortIdBase = syncCount + 1;
+  logger.verbose(`Scraping page ${page}, first sort ID will be ${sortIdBase}`);
+
+  const watchElementsArray = Array.from(watchElements);
+  const watches: Partial<FilmEntry>[] = [];
+  for (let i = 0; i < watchElementsArray.length; i++) {
+    if (maxSync && sortIdBase + i > maxSync) {
+      break;
+    }
+
+    const item = watchElementsArray[i];
     const w: Partial<FilmEntry> = {};
 
     const poster = $(item).find('.film-poster');
@@ -325,11 +339,52 @@ export async function scrapeWatchesByPage({
     w.heart = viewData.find("span.icon-liked").length === 1;
 
     w.date = collectionDate;
-    w.sortId = page * (i + 1);
+    w.sortId = sortIdBase + i;
 
-    return w;
-  }).get());
+    watches.push(w);
+  }
 
+  // const watches = await Promise.all(Array.from(watchElements).flatMap(async (item, i) => {
+  //   if (maxSync && sortIdBase + i > maxSync) {
+  //     return [];
+  //   }
+  //   const w: Partial<FilmEntry> = {};
+
+  //   const poster = $(item).find('.film-poster');
+  //   const filmData = poster.data();
+
+  //   if (typeof filmData.filmSlug === "string") {
+  //     w.letterboxdSlug = filmData.filmSlug;
+  //     const { data } = await tryLetterboxd(filmData.filmSlug);
+  //     const $$ = cheerio.load(data);
+  //     const { tmdbId } = $$("body").data();
+  //     const id = Number(tmdbId);
+  //     if (!isNaN(id)) {
+  //       w.movieId = id;
+  //     }
+  //   }
+
+  //   const name = $(item).find("img")?.attr()?.alt;
+  //   if (typeof name === "string") {
+  //     w.name = name;
+  //   }
+
+  //   const viewData = $(item).find("p.poster-viewingdata");
+
+  //   const rating = getRatingFromElement(viewData.find("span.rating"));
+  //   if (rating) {
+  //     w.stars = rating;
+  //   }
+
+  //   w.heart = viewData.find("span.icon-liked").length === 1;
+
+  //   w.date = collectionDate;
+  //   w.sortId = sortIdBase + i;
+
+  //   return w;
+  // })) as Partial<FilmEntry>[];
+
+  logger.debug(JSON.stringify(watches));
   return { watches };
 }
 

@@ -55,3 +55,6 @@ local-scripts
 # local scripts
 /bin/*.local.ts
 /bin/*.local.js
+
+# debug log stuff
+/*.log
