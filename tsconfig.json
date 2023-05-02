@@ -10,7 +10,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "module": "CommonJS",
     "moduleResolution": "node",
-    "noEmit": true,
+    "noEmit": false,
     "outDir": "./dist",
     "resolveJsonModule": true,
     "rootDir": "./src",
