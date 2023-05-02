@@ -1,5 +1,5 @@
 import { FindManyOptions, FindOptionsWhere, In, ILike } from "typeorm";
-import { SearchCollection } from "../../common/types/api";
+import { SearchCollection } from "../../common/types/db";
 import { Collection } from "../entities";
 import { getDataSource } from "../orm";
 

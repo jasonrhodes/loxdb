@@ -1,7 +1,7 @@
-import { In, ILike, FindManyOptions, FindOptionsWhere, SelectQueryBuilder } from "typeorm";
-import { getCastRepository, getCrewRepository, getMoviesRepository } from ".";
+import { SelectQueryBuilder } from "typeorm";
+import { getCastRepository, getCrewRepository } from ".";
 import { CREW_JOB_MAP } from "../../common/constants";
-import { PeopleStatsType, PersonStats, SearchApiResults, StatMode } from "../../common/types/api";
+import { PeopleStatsType, PersonStats, StatMode } from "../../common/types/db";
 import { backoff } from "../../lib/backoff";
 import { getErrorAsString } from "../../lib/getErrorAsString";
 import { tmdb, TmdbPerson } from "../../lib/tmdb";

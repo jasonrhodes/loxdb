@@ -1,5 +1,6 @@
 import { TmdbCast } from "../../lib/tmdb";
-import { Movie, User, FilmEntry } from "../../db/entities";
+import { Movie, User, FilmEntry, Collection, Person } from "../../db/entities";
+import { CREW_JOB_MAP } from "../constants";
 
 export type UserResponse = Omit<User, "password" | "salt" | "hashUserPassword" | "checkPassword"> & {
   isAdmin?: boolean;
@@ -9,6 +10,17 @@ export type UserPublic = UserResponse | UserPublicSafe;
 
 export type RatedMovie = Movie & Pick<FilmEntry, "stars">;
 export type RatedTmdbCast = TmdbCast & { rating?: number };
+
+export type SearchCollection = Pick<Collection, 'id' | 'name'>;
+
+export type OtherStatsType = "collections";
+export type PeopleStatsType = "actors" | keyof typeof CREW_JOB_MAP;
+export type AllStatsType = OtherStatsType | PeopleStatsType;
+export type StatMode = 'favorite' | 'most';
+export interface PersonStats extends Person {
+  averageRating: number;
+  countRated: number;
+}
 
 export enum SyncStatus {
   PENDING = "Pending",

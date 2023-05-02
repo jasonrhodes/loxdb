@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from "axios";
 import * as cheerio from "cheerio";
-import { ScrapedLetterboxdList } from "../common/types/api";
+import { ScrapedLetterboxdList } from "../common/types/scrape";
 import { FilmEntry, LetterboxdList, Movie, PopularLetterboxdMovie } from "../db/entities";
 import { getDataImageTagFromUrl } from "./dataImageUtils";
 import { getErrorAsString } from "./getErrorAsString";
