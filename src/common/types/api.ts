@@ -166,29 +166,30 @@ export interface UpdateUserSettingsResponse extends ApiSuccessResponse {
 }
 
 export interface EntryQueryResult {
-  entry_letterboxdSlug: string;
-  entry_movieId: number;
-  entry_name: string;
-  entry_unsyncable: false;
-  entry_userId: number;
-  entry_stars?: number;
-  entry_heart?: boolean;
-  entry_rewatch?: boolean;
-  entry_date?: Date;
+  entry_letterboxdSlug: FilmEntry['letterboxdSlug'];
+  entry_movieId: FilmEntry['movieId'];
+  entry_name: FilmEntry['name'];
+  entry_unsyncable: FilmEntry['unsyncable'];
+  entry_userId: FilmEntry['userId'];
+  entry_stars: FilmEntry['stars'];
+  entry_heart: FilmEntry['heart'];
+  entry_rewatch: FilmEntry['rewatch'];
+  entry_date: FilmEntry['date'];
   entry_dateRated?: Date;
-  movie_id: number;
-  movie_backdropPath: string;
-  movie_imdbId: string;
-  movie_originalLanguage: string;
-  movie_originalTitle: string;
-  movie_posterPath: string;
-  movie_popularity: number;
-  movie_runtime: number;
-  movie_releaseDate: string;
-  movie_letterboxdSlug: string;
-  movie_title: string;
-  movie_genres: string[];
-  movie_tagline: string;
+  entry_sortid: FilmEntry['sortId'];
+  movie_id: Movie['id'];
+  movie_backdropPath: Movie['backdropPath'];
+  movie_imdbId: Movie['imdbId'];
+  movie_originalLanguage: Movie['originalLanguage'];
+  movie_originalTitle: Movie['originalTitle'];
+  movie_posterPath: Movie['posterPath'];
+  movie_popularity: Movie['popularity'];
+  movie_runtime: Movie['runtime'];
+  movie_releaseDate: Movie['releaseDate'];
+  movie_letterboxdSlug: Movie['letterboxdSlug'];
+  movie_title: Movie['title'];
+  movie_genres: Movie['genres'];
+  movie_tagline: Movie['tagline'];
 }
 
 export type EntryMovie = Omit<Movie, 'overview' | 'syncedCredits' | 'syncedProductionCompanies' | 'syncedCollections' | 'productionCompanies' | 'productionCountries' | 'cast' | 'crew' | 'collections' | 'status' | 'entries' | TypeOrmEntityMethods>;
