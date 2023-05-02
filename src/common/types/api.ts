@@ -176,7 +176,7 @@ export interface EntryQueryResult {
   entry_rewatch: FilmEntry['rewatch'];
   entry_date: FilmEntry['date'];
   entry_dateRated?: Date;
-  entry_sortid: FilmEntry['sortId'];
+  entry_sortId: FilmEntry['sortId'];
   movie_id: Movie['id'];
   movie_backdropPath: Movie['backdropPath'];
   movie_imdbId: Movie['imdbId'];
