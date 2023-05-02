@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { DataSource, DataSourceOptions, LoggerOptions } from "typeorm";
 import * as entities from "./entities";
 import { logger } from "../lib/logger";
+import { data } from "cheerio/lib/api/attributes";
 
 type Mutable<T> = { -readonly [P in keyof T ]: T[P] };
 type MyDataSourceOptions = Mutable<DataSourceOptions>;
@@ -11,7 +12,7 @@ let dataSource: DataSource | null = null;
 export interface InitOrmOptions {
   resyncDb?: boolean;
 }
-export async function initOrm({ resyncDb = process.env.RESYNC_LOX_DB === 'true' }: InitOrmOptions = {}) {
+export async function initOrm({ resyncDb }: InitOrmOptions = {}) {
   logger.verbose('POST GRES CONNECTION BEING REINITIALIZED');
   
   const { DATABASE_TYPE } = process.env;
@@ -41,13 +42,27 @@ export async function initOrm({ resyncDb = process.env.RESYNC_LOX_DB === 'true' 
     //   dbOptions.database = DATABASE_PATH;
     //   break;
     case "postgres":
-      const { DATABASE_URL } = process.env;
-      if (!DATABASE_URL) {
-        throw new Error(`Invalid database configuration, postgres chosen but url or authentication not provided`);
+      const { DATABASE_URL, ADMIN_DATABASE_URL } = process.env;
+
+      let databaseUrl: string | null = null;
+
+      if (resyncDb && ADMIN_DATABASE_URL) {
+        databaseUrl = ADMIN_DATABASE_URL;
       }
+
+      if (!resyncDb && DATABASE_URL) {
+        databaseUrl = DATABASE_URL;
+      }
+
+      if (databaseUrl === null) {
+        const message = `Invalid POSTGRES configuration: DATABASE_URL not provided OR resync requested and ADMIN_DATABASE_URL not provided`;
+        logger.error(message);
+        throw new Error(message);
+      }
+
       dbOptions = {
         type: "postgres",
-        url: DATABASE_URL,
+        url: databaseUrl,
         ssl: {
           rejectUnauthorized: false
         }
@@ -103,6 +118,10 @@ interface TryDataSourceOptions {
 }
 
 async function tryDataSource({ counter = 1, initializing = false }: TryDataSourceOptions = {}): Promise<DataSource> {
+  if (dataSource !== null) {
+    return dataSource;
+  }
+
   if (counter > 10) {
     const message = `getDataSource attempted to initialize database too many times - ${counter} tries`;
     logger.error(message);

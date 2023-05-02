@@ -132,6 +132,15 @@ export async function findLastWatchesPage(username: string) {
   return Number(lastPage);
 }
 
+export async function findLastFilmsPage(username: string, path?: string) {
+  const url = `https://letterboxd.com/${username}/films${path}`;
+  const { data } = await tryLetterboxd(url);
+  const $ = cheerio.load(data);
+  const lastPageLink = $('.paginate-pages li.paginate-page:last-child');
+  const lastPage = lastPageLink.text();
+  return Number(lastPage);
+}
+
 export interface ScrapedMovie {
   id?: number;
   averageRating?: number;
@@ -266,14 +275,16 @@ interface ScrapeByPageOptions {
   username: string;
   page?: number;
   direction?: 'up' | 'down';
+  collectionDate: Date
 }
 
 export async function scrapeWatchesByPage({
   username,
-  page = 1
+  page = 1,
+  collectionDate
 }: ScrapeByPageOptions): Promise<{ watches: Array<Partial<FilmEntry>> }> {
   const { data } = await tryLetterboxd(
-    `https://letterboxd.com/${username}/films/by/date/page/${page}`
+    `https://letterboxd.com/${username}/films/by/rated-date/page/${page}`
   );
   const $ = cheerio.load(data);
   const watchElements = $('.poster-list li');
@@ -304,10 +315,40 @@ export async function scrapeWatchesByPage({
       w.name = name;
     }
 
+    const viewData = $(item).find("p.poster-viewingdata");
+
+    const rating = getRatingFromElement(viewData.find("span.rating"));
+    if (rating) {
+      w.stars = rating;
+    }
+
+    w.heart = viewData.find("span.icon-liked").length === 1;
+
+    w.date = collectionDate;
+    w.sortId = page * (i + 1);
+
     return w;
   }).get());
 
   return { watches };
+}
+
+const ratingRegex = /rated-([0-9]{1,2})/;
+
+function getRatingFromElement(el?: cheerio.Cheerio<cheerio.Element>) {
+  const classes = el?.attr('class') || '';
+  const matchResult = classes.match(ratingRegex);
+
+  if (matchResult === null) {
+    return undefined;
+  }
+
+  const rating = Number(matchResult[1]);
+  if (!isNaN(rating)) {
+    return rating / 2;
+  } else {
+    return undefined;
+  }
 }
 
 export async function scrapeDiaryEntriesByPage({

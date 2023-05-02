@@ -51,3 +51,7 @@ local-scripts
 
 # build dir
 /dist
+
+# local scripts
+/bin/*.local.ts
+/bin/*.local.js

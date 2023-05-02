@@ -56,7 +56,7 @@ export async function syncAllMoviesCredits({ limit = 5000 }: SyncAllMoviesCredit
       await MoviesRepo.save(movie);
     } catch (error: any) {
       loxDBLogger.debug(JSON.stringify(movie.crew));
-      loxDBLogger.error('Movie save error', movie.id, getErrorAsString(error));
+      loxDBLogger.error('Save error while trying to update movie wity syncedCredits: true', movie.id, getErrorAsString(error));
       throw error;
     }
   }

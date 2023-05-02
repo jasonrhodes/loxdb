@@ -19,6 +19,9 @@ export class FilmEntry {
   @Column({ nullable: true })
   date?: Date;
 
+  @Column({ nullable: true })
+  sortId?: number;
+
   @Column()
   name: string;
 
