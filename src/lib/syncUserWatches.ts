@@ -47,6 +47,9 @@ export async function syncUserWatches({
 }: SyncUserWatchesOptions) {
   let syncedWatches: FilmEntry[] = [];
   const UsersRepo = await getUserRepository();
+
+  await UsersRepo.setLastEntriesUpdateAttempt(userId);
+
   const { username } = await checkUserId(userId);
   const lastWatchesPage = await findLastFilmsPage(username, '/by/rated-date/');
 

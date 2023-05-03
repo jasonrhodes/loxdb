@@ -41,6 +41,9 @@ export class User {
   lastEntriesUpdate: Date;
 
   @Column({ nullable: true })
+  lastEntriesUpdateAttempt: Date;
+
+  @Column({ nullable: true })
   lastLogin?: Date;
 
   @OneToOne(() => UserSettings, (settings) => settings.user, { eager: true, cascade: true })

@@ -89,6 +89,24 @@ export const getUserRepository = async () => (await getDataSource()).getReposito
     return await this.update({ id }, { lastEntriesUpdate: date });
   },
 
+  async setLastEntriesUpdateAttempt(id: number, date: Date = new Date()) {
+    return await this.update({ id }, { lastEntriesUpdateAttempt: date });
+  },
+
+  async getUserWithOldestEntries() {
+    const users = await this.find({
+      order: {
+        lastEntriesUpdateAttempt: 'DESC',
+        lastEntriesUpdate: 'DESC'
+      },
+      take: 1
+    });
+    if (users.length === 0) {
+      return null;
+    }
+    return this.convertUserToPublicSafe(users[0]);
+  },
+
   async getPublicSafeUser(userId: number) {
     const user = await this.findOne({
       where: { 
