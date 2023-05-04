@@ -5,6 +5,7 @@ export * from "./DynamicListsRepo";
 export * from "./FilmEntriesRepo";
 export * from "./GenresRepo";
 export * from "./LetterboxdListsRepo";
+export * from "./LetterboxdUserEntrySyncRepo";
 export * from "./MoviesRepo";
 export * from "./PeopleRepo";
 export * from "./PopularLetterboxdMoviesRepo";

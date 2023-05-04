@@ -17,6 +17,9 @@ export class LetterboxdUserEntrySync {
   page?: number;
 
   @Column({ nullable: true })
+  batchId?: string;
+
+  @Column({ nullable: true })
   requestDate?: Date;
 
   @Column({ nullable: true })
