@@ -5,6 +5,7 @@ export * from "./DynamicList";
 export * from "./FilmEntry";
 export * from "./Genre";
 export * from "./LetterboxdList";
+export * from "./LetterboxdUserEntrySync";
 export * from "./Movie";
 export * from "./Person";
 export * from "./PopularLetterboxdMovie";

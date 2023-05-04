@@ -6,6 +6,8 @@
 import { FilmEntry } from "../db/entities";
 import { getFilmEntriesRepository, getUserRepository } from "../db/repositories";
 import { findLastFilmsPage, scrapeWatchesByPage } from "./letterboxd";
+import { scrapeAllWatchesByPage } from "./letterboxd-scrapers";
+
 import { logger } from "./logger";
 
 export class SyncLetterboxdError extends Error {
@@ -206,4 +208,63 @@ async function checkUserId(userId: number) {
   }
 
   return user;
+}
+
+/**
+ * Scrapes for ALL ratings, but on a per page basis (not recursive).
+ * 
+ * This method is meant to be called by a lambda that is processing 
+ * just one page at a time, starting with the earliest added review.
+ * 
+ */
+export interface SyncAllForUserPerPageOptions {
+  userId: number;
+  username: string;
+  page: number;
+}
+
+export async function syncAllForUserPerPage({ userId, username, page }: SyncAllForUserPerPageOptions) {
+  const { url, watches } = await scrapeAllWatchesByPage({ username, page });
+
+  if (watches.length === 0) {
+    return [];
+  }
+
+  const syncedForPage: FilmEntry[] = [];
+  const FilmEntriesRepo = await getFilmEntriesRepository();
+
+  for (let i = 0; i <= watches.length; i++) {
+    const watched = watches[i];
+    if (!watched) {
+      continue;
+    }
+
+    const { movieId, name } = watched;
+
+    if (typeof movieId !== "number") {
+      throw new Error(`Invalid TMDB ID: ${movieId} (${typeof movieId})`);
+    }
+
+    if (typeof name !== "string") {
+      throw new Error(`Invalid name ${name} (${typeof name})`);
+    }
+
+    try {
+      watched.userId = userId;
+      logger.debug(`Saving ${watched.name}:`, JSON.stringify(watched));
+      const created = FilmEntriesRepo.create(watched);
+      const saved = await FilmEntriesRepo.save(created);
+
+      syncedForPage.push(saved);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const fullMessage = `Error while syncing watches for Letterboxd url ${url}: ${errorMessage}`;
+      console.log(fullMessage)
+      throw new Error(fullMessage);
+    }
+  }
+
+  logger.verbose(`Successfully synced ${syncedForPage.length} movies for user ${username} (from ${url})`)
+
+  return syncedForPage;
 }

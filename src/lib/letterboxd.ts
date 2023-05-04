@@ -33,7 +33,7 @@ async function wait(ms: number) {
 
 const RETRYABLE_ERRORS = ["ECONNRESET", "ENOTFOUND"];
 
-async function tryLetterboxd(
+export async function tryLetterboxd(
   url: string,
   tries: number = 0
 ): Promise<AxiosResponse<any, any>> {
@@ -271,6 +271,58 @@ export async function scrapeMovieByUrl(url: string): Promise<ScrapedMovie> {
   };
 }
 
+export async function parseWatchPoster($element: cheerio.Cheerio<cheerio.Element>) {
+  const poster = $element.find('.film-poster');
+  const filmData = poster.data();
+
+  const w: Partial<FilmEntry> = {};
+
+  if (typeof filmData.filmSlug === "string") {
+    w.letterboxdSlug = filmData.filmSlug;
+    const { data } = await tryLetterboxd(filmData.filmSlug);
+    const $$ = cheerio.load(data);
+    const { tmdbId } = $$("body").data();
+    const id = Number(tmdbId);
+    if (!isNaN(id)) {
+      w.movieId = id;
+    }
+  }
+
+  return w;
+}
+
+export async function parseMovieTitleFromImage($element: cheerio.Cheerio<cheerio.Element>) {
+  const w: Partial<FilmEntry> = {};
+  const name = $element.find("img")?.attr()?.alt;
+  if (typeof name === "string") {
+    w.name = name;
+  }
+  return w;
+}
+
+export async function parseViewingData($element: cheerio.Cheerio<cheerio.Element>) {
+  const w: Partial<FilmEntry> = {};
+  const $viewData = $element.find("p.poster-viewingdata");
+
+  const rating = getRatingFromElement($viewData);
+  if (rating) {
+    w.stars = rating;
+  }
+
+  w.heart = $viewData.find("span.icon-liked").length === 1;
+  const watchDate = $viewData.find("time")?.attr()?.datetime;
+  if (watchDate) {
+    const date = new Date(watchDate);
+    if (date.toString() !== "Invalid Date") {
+      w.date = date;
+    }
+  }
+
+  return w;
+}
+
+
+
 interface ScrapeByPageOptions {
   username: string;
   page?: number;
@@ -308,40 +360,19 @@ export async function scrapeWatchesByPage({
     }
 
     const item = watchElementsArray[i];
-    const w: Partial<FilmEntry> = {};
+    const $item = $(item);
+    
+    const posterDetails = await parseWatchPoster($item);
+    const movieTitle = await parseMovieTitleFromImage($item);
+    const viewData = await parseViewingData($item);  
 
-    const poster = $(item).find('.film-poster');
-    const filmData = poster.data();
-
-    if (typeof filmData.filmSlug === "string") {
-      w.letterboxdSlug = filmData.filmSlug;
-      const { data } = await tryLetterboxd(filmData.filmSlug);
-      const $$ = cheerio.load(data);
-      const { tmdbId } = $$("body").data();
-      const id = Number(tmdbId);
-      if (!isNaN(id)) {
-        w.movieId = id;
-      }
-    }
-
-    const name = $(item).find("img")?.attr()?.alt;
-    if (typeof name === "string") {
-      w.name = name;
-    }
-
-    const viewData = $(item).find("p.poster-viewingdata");
-
-    const rating = getRatingFromElement(viewData.find("span.rating"));
-    if (rating) {
-      w.stars = rating;
-    }
-
-    w.heart = viewData.find("span.icon-liked").length === 1;
-
-    w.date = collectionDate;
-    w.sortId = sortIdBase + i;
-
-    watches.push(w);
+    watches.push({ 
+      ...posterDetails, 
+      ...movieTitle,
+      ...viewData,
+      date: collectionDate,
+      sortId: sortIdBase + i
+    });
   }
 
   // const watches = await Promise.all(Array.from(watchElements).flatMap(async (item, i) => {
@@ -371,7 +402,7 @@ export async function scrapeWatchesByPage({
 
   //   const viewData = $(item).find("p.poster-viewingdata");
 
-  //   const rating = getRatingFromElement(viewData.find("span.rating"));
+  //   const rating = getRatingFromElement(viewData);
   //   if (rating) {
   //     w.stars = rating;
   //   }
@@ -390,8 +421,9 @@ export async function scrapeWatchesByPage({
 
 const ratingRegex = /rated-([0-9]{1,2})/;
 
-function getRatingFromElement(el?: cheerio.Cheerio<cheerio.Element>) {
-  const classes = el?.attr('class') || '';
+function getRatingFromElement($viewData: cheerio.Cheerio<cheerio.Element>) {
+  const $span = $viewData.find("span.rating")
+  const classes = $span.attr('class') || '';
   const matchResult = classes.match(ratingRegex);
 
   if (matchResult === null) {

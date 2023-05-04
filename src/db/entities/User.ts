@@ -3,6 +3,7 @@ import { LetterboxdList } from ".";
 import { getSalt, hash, getRememberMeToken } from "../../lib/hashPassword";
 import { FilmEntry } from "./FilmEntry";
 import { UserSettings } from "./UserSettings";
+import { LetterboxdUserEntrySync } from "./LetterboxdUserEntrySync";
 
 @Entity('users')
 @Unique(['email', 'username'])
@@ -58,6 +59,9 @@ export class User {
 
   @OneToMany(() => LetterboxdList, (list) => list.owner)
   ownedLists: Relation<LetterboxdList>[];
+
+  @OneToMany(() => LetterboxdUserEntrySync, (sync) => sync.user)
+  letterboxdEntrySyncs: Relation<LetterboxdUserEntrySync>[];
 
   @ManyToMany(() => LetterboxdList, (list) => list.trackers)
   @JoinTable()

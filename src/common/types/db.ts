@@ -53,3 +53,16 @@ export enum SyncTrigger {
 }
 
 export type TypeOrmEntityMethods = 'hasId' | 'remove' | 'save' | 'softRemove' | 'recover' | 'reload';
+
+export enum LetterboxdUserEntrySyncStatus {
+  REQUESTED = "requested",
+  QUEUED = "queued",
+  IN_PROGRESS = "in-progress",
+  FAILED = "failed",
+  COMPLETE = "complete"
+}
+
+export enum LetterboxdUserEntrySyncType {
+  FULL = "full",
+  RECENT = "recent"
+}
