@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, Relation } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Relation } from "typeorm";
 import { User } from "./User";
 import { LetterboxdUserEntrySyncStatus, LetterboxdUserEntrySyncType } from "../../common/types/db";
 
@@ -29,6 +29,7 @@ export class LetterboxdUserEntrySync {
   endDate?: Date;
 
   @ManyToOne(() => User, (user) => user.letterboxdEntrySyncs)
+  @JoinColumn()
   user: Relation<User>;
 
   @Column({ nullable: true })
