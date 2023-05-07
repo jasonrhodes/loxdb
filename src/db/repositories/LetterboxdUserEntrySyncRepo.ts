@@ -27,12 +27,25 @@ export const getLetterboxdUserEntrySyncRepository = async () => (await getDataSo
       return [];
     }
 
-    const queuedBatch = await this.findBy({ status: LetterboxdUserEntrySyncStatus.QUEUED, batchId: uuid });
+    const queuedBatch = await this.find({
+      where: { 
+        status: LetterboxdUserEntrySyncStatus.QUEUED, batchId: uuid 
+      },
+      relations: {
+        user: true
+      }
+    });
 
     if (queuedBatch.length !== affected) {
       throw new Error(`Something went wrong while queueing the requested syncs. { "queuedBatch.length": ${queuedBatch.length}, "affected": ${affected} }`);
     }
 
-    return queuedBatch;
+    return queuedBatch.map(sync => ({
+      ...sync,
+      user: {
+        id: sync.user.id,
+        username: sync.user.username
+      }
+    }));
   }
 });
