@@ -17,6 +17,9 @@ export class LetterboxdUserEntrySync {
   page?: number;
 
   @Column({ nullable: true })
+  lastPageProcessed?: number;
+
+  @Column({ nullable: true })
   batchId?: string;
 
   @Column({ nullable: true })
@@ -27,6 +30,9 @@ export class LetterboxdUserEntrySync {
 
   @Column({ nullable: true })
   endDate?: Date;
+
+  @Column({ nullable: true })
+  lastUpdated?: Date;
 
   @ManyToOne(() => User, (user) => user.letterboxdEntrySyncs)
   @JoinColumn()

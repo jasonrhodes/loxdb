@@ -37,6 +37,9 @@ export class FilmEntry {
   @Column({ default: false })
   unsyncable: boolean;
 
+  @Column({ nullable: true })
+  lastUpdated?: Date;
+
   @ManyToOne(() => Movie, {
     createForeignKeyConstraints: false,
     eager: true

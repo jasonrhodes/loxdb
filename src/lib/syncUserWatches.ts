@@ -253,18 +253,26 @@ export async function syncAllForUserPerPage({ userId, username, page }: SyncAllF
       watched.userId = userId;
       logger.debug(`Saving ${watched.name}:`, JSON.stringify(watched));
       const created = FilmEntriesRepo.create(watched);
-      const saved = await FilmEntriesRepo.save(created);
-
-      syncedForPage.push(saved);
+      syncedForPage.push(created);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const fullMessage = `Error while syncing watches for Letterboxd url ${url}: ${errorMessage}`;
+      const fullMessage = `Error while SCRAPING watches for Letterboxd url ${url}: ${errorMessage}`;
       console.log(fullMessage)
       throw new Error(fullMessage);
     }
   }
 
-  logger.verbose(`Successfully synced ${syncedForPage.length} movies for user ${username} (from ${url})`)
+  try {
+    // ONE database query per page hopefully makes this slightly faster
+    const saved = await FilmEntriesRepo.save(syncedForPage);
+    logger.verbose(`Successfully synced ${saved.length} movies for user ${username} (from ${url})`)
+    return saved;
+  } catch (error: any) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const fullMessage = `Error while SAVING watches for Letterboxd url ${url}: ${errorMessage}`;
+    console.log(fullMessage)
+    throw new Error(fullMessage);
+  }
 
-  return syncedForPage;
+  
 }
