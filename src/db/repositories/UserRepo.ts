@@ -1,9 +1,19 @@
-import { User } from "../entities/User";
+import { User } from "../entities";
 import { getDataSource } from "../orm";
 import { getRememberMeToken, hash } from "../../lib/hashPassword";
 import { LetterboxdAccountLevel } from "../../common/types/base";
 import { isAdmin } from "../../lib/isAdmin";
 import { UserPublic } from "../../common/types/db";
+import { FindManyOptions, FindOptionsRelations } from "typeorm";
+
+// const userRelations: Array<keyof FindOptionsRelations<User>> = [
+//   'settings',
+//   'ratings',
+//   'followedLists',
+//   'ownedLists',
+//   'letterboxdEntrySyncs',
+//   'trackedLists'
+// ];
 
 export interface UserLetterboxdDetails {
   username: string;
@@ -122,8 +132,13 @@ export const getUserRepository = async () => (await getDataSource()).getReposito
     return this.convertUserToPublicSafe(user);
   },
 
-  async getPublicSafeUsers({ limit, offset }: { limit?: number, offset?: number } = {}) {
-    const users = await this.find({ take: limit, skip: offset });
+  async getPublicSafeUsers({ limit, offset, relations }: { limit?: number, offset?: number; relations?: FindOptionsRelations<User> } = {}) {
+    const options: FindManyOptions<User> = {
+      take: limit,
+      skip: offset,
+      relations
+    };
+    const users = await this.find(options);
     return users.map(this.convertUserToPublicSafe);
   },
 

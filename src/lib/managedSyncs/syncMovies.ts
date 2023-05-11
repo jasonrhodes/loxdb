@@ -1,12 +1,10 @@
 import { SyncType, SyncStatus, SyncTrigger } from "../../common/types/db";
-import { Sync } from "../../db/entities";
 import { 
   getSyncRepository, 
   getPopularLetterboxdMoviesRepository 
 } from "../../db/repositories";
 import { BetterloxApiError } from "../BetterloxApiError";
-import { ScrapedMovie, scrapeMoviesByPage, scrapeMoviesOverPages } from "../letterboxd";
-import { MoreThan } from "typeorm";
+import { ScrapedMovie, scrapeMoviesOverPages } from "../letterboxd";
 import { GENRES } from "../../common/constants";
 import axios from "axios";
 import { logger as loxDBLogger } from "../logger";
@@ -43,66 +41,67 @@ export interface SyncPopularMoviesPerYearOptions {
   moviesPerYear: number;
   startYear?: number;
   endYear?: number;
+  trigger: SyncTrigger;
 }
 
 export async function syncPopularMoviesPerYear({
   moviesPerYear,
   startYear = 1900,
   endYear,
-  yearBatchSize = 20
+  yearBatchSize = 20,
+  trigger
 }: SyncPopularMoviesPerYearOptions) {
   const SyncRepo = await getSyncRepository();
-  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
-  sync.type = SyncType.POPULAR_MOVIES_YEAR;
-  await SyncRepo.save(sync);
 
-  if (!endYear) {
-    loxDBLogger.verbose('Popular Year Sync: Calculating end year because one was not specifically provided');
-    const lastPopularYearSync = await SyncRepo.find({
-      where: {
-        type: SyncType.POPULAR_MOVIES_YEAR,
-        status: SyncStatus.COMPLETE
-      },
-      order: {
-        finished: 'DESC'
-      },
-      take: 1
-    });
-
-    loxDBLogger.verbose('Previous Popular Year Syncs:', JSON.stringify(lastPopularYearSync));
-
-    const currentYear = (new Date()).getUTCFullYear();
-
-    if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
-      const lastRange = lastPopularYearSync[0].secondaryId;
-      const possibleStartYear = Number(lastRange.substring(5));
-      if (possibleStartYear < currentYear) {
-        startYear = possibleStartYear;
+  return SyncRepo.manageAction<{ startYear: number; endYear: number; }>({
+    trigger,
+    type: SyncType.POPULAR_MOVIES_YEAR,
+    action: async () => {
+      if (!endYear) {
+        loxDBLogger.verbose('Popular Year Sync: Calculating end year because one was not specifically provided');
+        const lastPopularYearSync = await SyncRepo.find({
+          where: {
+            type: SyncType.POPULAR_MOVIES_YEAR,
+            status: SyncStatus.COMPLETE
+          },
+          order: {
+            finished: 'DESC'
+          },
+          take: 1
+        });
+    
+        loxDBLogger.verbose('Previous Popular Year Syncs:', JSON.stringify(lastPopularYearSync));
+    
+        const currentYear = (new Date()).getUTCFullYear();
+    
+        if (lastPopularYearSync.length > 0 && lastPopularYearSync[0].secondaryId) {
+          const lastRange = lastPopularYearSync[0].secondaryId;
+          const possibleStartYear = Number(lastRange.substring(5));
+          if (possibleStartYear < currentYear) {
+            startYear = possibleStartYear;
+          }
+        }
+    
+        endYear = Math.min(currentYear, startYear + yearBatchSize);
       }
+    
+      loxDBLogger.info('Syncing popular movies for year range:', `${startYear} - ${endYear}`);
+      
+      // sync movies from letterboxd /by/year pages
+      const numSynced = await syncPopularMoviesByDateRange({
+        startYear,
+        endYear,
+        moviesPerYear
+      });
+    
+      return {
+        syncedCount: numSynced,
+        secondaryId: `${startYear}-${endYear}`,
+        startYear,
+        endYear
+      };
     }
-
-    endYear = Math.min(currentYear, startYear + yearBatchSize);
-  }
-
-  loxDBLogger.info('Syncing popular movies for year range:', `${startYear} - ${endYear}`);
-  // sync movies from letterboxd /by/year pages
-  const numSynced = await syncPopularMoviesByDateRange({
-    startYear,
-    endYear,
-    moviesPerYear
   });
-
-  await SyncRepo.endSync(sync, {
-    status: SyncStatus.COMPLETE,
-    secondaryId: `${startYear}-${endYear}`,
-    numSynced
-  });
-
-  return {
-    cachedCount: numSynced,
-    startYear,
-    endYear
-  };
 }
 
 export async function syncPopularMoviesByDateRange({

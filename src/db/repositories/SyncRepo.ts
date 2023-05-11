@@ -3,13 +3,15 @@ import { SyncStatus, SyncTrigger, SyncType } from "../../common/types/db";
 import { Sync } from "../entities";
 import { getDataSource } from "../orm";
 
+export type ManagedAction<T extends {}> = () => Promise<T & { syncedCount: number; secondaryId?: string; }>;
+
 function minutesAgo(min: number, date: Date = new Date()) {
   return new Date(date.getTime() - (min * 60 * 1000));
 }
 
 export const getSyncRepository = async () => (await getDataSource()).getRepository(Sync).extend({
-  async queueSync({ trigger = SyncTrigger.SYSTEM, username }: { trigger: SyncTrigger, username?: string }) {
-    const created = this.create({ username, trigger });
+  async queueSync({ trigger = SyncTrigger.SYSTEM, username, type }: { trigger: SyncTrigger, username?: string, type?: SyncType }) {
+    const created = this.create({ username, trigger, type });
     const sync = await this.save(created);
     const minStart = minutesAgo(10); // wait for a rogue sync before we close that and start a new one
     const systemWhere = {
@@ -37,31 +39,49 @@ export const getSyncRepository = async () => (await getDataSource()).getReposito
 
   async startSync(sync: Sync) {
     sync.status = SyncStatus.IN_PROGRESS;
+    sync.started = new Date();
     return await this.save(sync);
   },
 
   async endSync(sync: Sync, {
     type,
-    status,
     numSynced,
     secondaryId,
     errorMessage
-  }: Partial<Sync>) {
+  }: Partial<Sync> = {}) {
     if (type) {
       sync.type = type;
     }
+
     if (numSynced) {
       sync.numSynced = numSynced;
     }
+
     if (errorMessage) {
       sync.errorMessage = errorMessage;
+      sync.status = SyncStatus.FAILED;
+    } else {
+      sync.status = SyncStatus.COMPLETE;
     }
-    if (status) {
-      sync.status = status;
-    }
+
     sync.secondaryId = secondaryId;
     sync.finished = new Date();
+
     return await this.save(sync);
+  },
+
+  async manageAction<T extends {}>({ trigger, type, action }: { trigger: SyncTrigger; type: SyncType; action: ManagedAction<T> }) {
+    const sync = this.create({ trigger, type });
+    await this.startSync(sync);
+
+    try {
+      const result = await action();
+      await this.endSync(sync, { numSynced: result.syncedCount, secondaryId: result.secondaryId });
+      return result;
+    } catch (error: any) {
+      await this.endSync(sync, { errorMessage: String(error.message) });
+      throw error;
+    }
   },
 
   async clearUnfinished({ trigger }: { trigger: SyncTrigger }) {

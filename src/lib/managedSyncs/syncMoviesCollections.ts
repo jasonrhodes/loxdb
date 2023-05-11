@@ -1,6 +1,7 @@
-import { SyncType, SyncStatus } from "../../common/types/db";
+import { SyncType, SyncStatus, SyncTrigger } from "../../common/types/db";
 import { Movie, Sync } from "../../db/entities";
 import { getSyncRepository, getMoviesRepository, getCollectionsRepository } from "../../db/repositories";
+import { logger } from "../logger";
 import { tmdb } from "../tmdb";
 
 function checkMovieForCollection(c: any) {
@@ -57,43 +58,38 @@ export async function syncOneMovieCollections(movie: Movie) {
   };
 }
 
-export async function syncAllMoviesCollections(sync: Sync, limit?: number) {
+export async function syncAllMoviesCollections({ limit, trigger }: { limit?: number, trigger: SyncTrigger }) {
   const SyncRepo = await getSyncRepository();
-  // Check for ratings with missing movies
-  sync.type = SyncType.MOVIES_COLLECTIONS;
-  SyncRepo.save(sync);
-  const MoviesRepo = await getMoviesRepository();
-  const moviesWithMissingCollections = await MoviesRepo.getMissingCollections();
-  const missingCount = moviesWithMissingCollections.length;
-  if (missingCount === 0) {
-    return { synced: [], count: 0 };
-  }
 
-  const maxToSync = limit ? Math.min(missingCount, limit) : missingCount;
-  const synced: Movie[] = [];
+  return await SyncRepo.manageAction<{ missing: Movie[] }>({
+    trigger,
+    type: SyncType.MOVIES_COLLECTIONS,
+    action: async () => {
+      const MoviesRepo = await getMoviesRepository();
+      const moviesWithMissingCollections = await MoviesRepo.getMissingCollections();
+      const missingCount = moviesWithMissingCollections.length;
+      if (missingCount === 0) {
+        return { missing: [], syncedCount: 0 };
+      }
 
-  for (let i = 0; i < maxToSync; i++) {
-    const movie = moviesWithMissingCollections[i];
-    try {
-      const { movie: updated } = await syncOneMovieCollections(movie);
-      console.log('UPDATED', JSON.stringify(updated));
-      synced.push(updated);
-    } catch (error) {
-      await SyncRepo.endSync(sync, {
-        status: SyncStatus.FAILED,
-        errorMessage: error instanceof Error ? error.message : "unknown error ocurred while syncing movie collections",
-        numSynced: synced.length
-      });
-      console.log(JSON.stringify(movie.collections));
-      console.log('Movie sync error', movie.id, error instanceof Error ? error.message : error);
-      throw error;
+      const maxToSync = limit ? Math.min(missingCount, limit) : missingCount;
+      const synced: Movie[] = [];
+
+      for (let i = 0; i < maxToSync; i++) {
+        const movie = moviesWithMissingCollections[i];
+        try {
+          const { movie: updated } = await syncOneMovieCollections(movie);
+          console.log('UPDATED', JSON.stringify(updated));
+          synced.push(updated);
+        } catch (error: unknown) {
+          const message = `syncMoviesCollections error during movie ID: ${movie.id} -- ${error instanceof Error ? error.message : error}`;
+          logger.info(message);
+          logger.verbose(JSON.stringify(movie.collections))
+          throw new Error(message);
+        }
+      }
+
+      return { missing: synced, syncedCount: synced.length };
     }
-  }
-
-  await SyncRepo.endSync(sync, {
-    status: SyncStatus.COMPLETE,
-    numSynced: synced.length
   });
-
-  return { synced, count: synced.length };
 }

@@ -1,7 +1,9 @@
 import { TmdbCast } from "../../lib/tmdb";
 import { Movie, User, FilmEntry, Collection, Person } from "../../db/entities";
 import { CREW_JOB_MAP } from "../constants";
+import type { InsertResult } from "typeorm";
 
+export type DBInsertResult = InsertResult;
 export type UserResponse = Omit<User, "password" | "salt" | "hashUserPassword" | "checkPassword"> & {
   isAdmin?: boolean;
 };
@@ -49,6 +51,7 @@ export enum SyncType {
 
 export enum SyncTrigger {
   SYSTEM = "system",
+  LAMBDA = "system:lambda",
   USER = "user"
 }
 

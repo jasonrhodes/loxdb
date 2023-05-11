@@ -28,51 +28,44 @@ export async function syncOneMovieCredits(movie: Movie) {
 }
 
 export interface SyncAllMoviesCreditsOptions {
+  trigger: SyncTrigger;
   limit?: number;
 }
 
-export async function syncAllMoviesCredits({ limit = 5000 }: SyncAllMoviesCreditsOptions = {}) {
+export async function syncAllMoviesCredits({ trigger, limit = 5000 }: SyncAllMoviesCreditsOptions) {
   const SyncRepo = await getSyncRepository();
-  const { sync } = await SyncRepo.queueSync({ trigger: SyncTrigger.SYSTEM });
-  sync.type = SyncType.MOVIES_CREDITS;
-  SyncRepo.save(sync);
-  const MoviesRepo = await getMoviesRepository();
-  const moviesWithMissingCredits = await MoviesRepo.getMissingCredits(limit);
-  if (moviesWithMissingCredits.length === 0) {
-    return { cast: [], crew: [], syncedCount: 0 };
-  }
 
-  let allSyncedCastRoles: CastRole[] = [];
-  let allSyncedCrewRoles: CrewRole[] = [];
+  return await SyncRepo.manageAction<{ cast: CastRole[], crew: CrewRole[] }>({
+    trigger,
+    type: SyncType.MOVIES_CREDITS,
+    action: async () => {
+      const MoviesRepo = await getMoviesRepository();
+      const moviesWithMissingCredits = await MoviesRepo.getMissingCredits(limit);
+      if (moviesWithMissingCredits.length === 0) {
+        return { cast: [], crew: [], syncedCount: 0 };
+      }
 
-  for (let i = 0; i < moviesWithMissingCredits.length; i++) {
-    const movie = moviesWithMissingCredits[i];
-    const { syncedCastRoles, syncedCrewRoles } = await syncOneMovieCredits(movie);
-    allSyncedCastRoles = allSyncedCastRoles.concat(syncedCastRoles);
-    allSyncedCrewRoles = allSyncedCrewRoles.concat(syncedCrewRoles);
-    movie.syncedCredits = true;
+      let allSyncedCastRoles: CastRole[] = [];
+      let allSyncedCrewRoles: CrewRole[] = [];
 
-    try {
-      await MoviesRepo.save(movie);
-    } catch (error: any) {
-      loxDBLogger.debug(JSON.stringify(movie.crew));
-      loxDBLogger.error('Save error while trying to update movie wity syncedCredits: true', movie.id, getErrorAsString(error));
-      throw error;
+      for (let i = 0; i < moviesWithMissingCredits.length; i++) {
+        const movie = moviesWithMissingCredits[i];
+        const { syncedCastRoles, syncedCrewRoles } = await syncOneMovieCredits(movie);
+        allSyncedCastRoles = allSyncedCastRoles.concat(syncedCastRoles);
+        allSyncedCrewRoles = allSyncedCrewRoles.concat(syncedCrewRoles);
+        movie.syncedCredits = true;
+
+        try {
+          await MoviesRepo.save(movie);
+        } catch (error: any) {
+          loxDBLogger.debug(JSON.stringify(movie.crew));
+          loxDBLogger.error('Save error while trying to update movie wity syncedCredits: true', movie.id, getErrorAsString(error));
+          throw error;
+        }
+      }
+
+      const numSynced = allSyncedCastRoles.length + allSyncedCrewRoles.length;
+      return { cast: allSyncedCastRoles, crew: allSyncedCrewRoles, syncedCount: numSynced };
     }
-  }
-
-  const numSynced = allSyncedCastRoles.length + allSyncedCrewRoles.length;
-
-  if (allSyncedCastRoles.length > 0 || allSyncedCrewRoles.length > 0) {
-    await SyncRepo.endSync(sync, {
-      status: SyncStatus.COMPLETE,
-      numSynced
-    });
-  } else {
-    const message = `Attempted to sync ${moviesWithMissingCredits.length} movies, but 0 credits were synced. ${JSON.stringify(moviesWithMissingCredits)}`;
-    loxDBLogger.error(message);
-    throw new Error(message);
-  }
-
-  return { cast: allSyncedCastRoles, crew: allSyncedCrewRoles, syncedCount: numSynced };
+  });
 }
